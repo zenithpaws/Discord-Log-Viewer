@@ -1,0 +1,50 @@
+# 🐾 Discord Log & Record Viewer
+
+A lightweight, fast, client-side Discord chat log viewer built with Flask and modern JavaScript. Easily search, filter, and review exported Discord JSON logs directly in your browser.
+
+---
+
+## ✨ Features
+
+* 🚀 **Client-Side Processing:** Instant loading and zero Vercel serverless payload limits (`413 Payload Too Large`).
+* 🔒 **100% Private:** Your chat logs and uploaded JSON files never leave your browser or get sent to external servers.
+* 📷 **Media & Attachment Detection:** Automatically parses and previews images, videos, audio clips, and documents.
+* ⚠️ **Broken Link Handling:** Detects expired Discord CDN attachments and flags them cleanly with a direct fallback link.
+* 🕒 **Smart Local Timestamps:** Converts ISO timestamps automatically to the viewer's local computer timezone and respects their system clock format (12-hour AM/PM vs 24-hour).
+* 🔍 **Real-Time Filtering & Search:** Live keyword search across messages and usernames, with dedicated category filters (Images, Videos, Links, Broken Media, etc.).
+
+---
+
+## ⚠️ Important Note / Performance Warning
+
+> **Warning:** This viewer parses and renders JSON data entirely on the **client side** inside your browser. 
+> 
+> Importing extremely large export files (e.g., **100,000+ messages or files over 50MB**) may cause your browser tab to **briefly freeze or become unresponsive** while it builds the DOM elements and verifies media URLs. 
+> 
+> Please give your browser a few seconds to finish rendering large chat logs!
+
+---
+
+## 🚀 Quickstart & Local Setup
+
+### 1. Prerequisites
+Make sure you have **Python 3.8+** installed on your system.
+
+### 2. Installation
+Clone the repository and install Flask:
+
+```bash
+git clone [https://github.com/your-username/discord-log-viewer.git](https://github.com/your-username/discord-log-viewer.git)
+cd discord-log-viewer
+pip install flask
+
+---
+
+
+## 🌐 Live Online Version
+
+Don't want to run it locally? You can use the hosted web version instantly in your browser:
+
+👉 **[discord-log-viewer.vercel.app](https://discord-log-viewer.vercel.app)**
+
+*(All processing happens locally in your browser—your JSON exports are never uploaded or stored on the server!)*
