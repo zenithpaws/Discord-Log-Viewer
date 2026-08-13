@@ -115,13 +115,13 @@
     <div class="container">
         <h1>🐾 Discord Record Viewer</h1>
 
-        <!-- File Upload Form -->
-        <form class="upload-section" action="/" method="POST" enctype="multipart/form-data">
+        <!-- Local File Import (No Server Upload!) -->
+        <div class="upload-section">
             <div style="width: 100%;">
                 <strong>Import JSON Export: </strong>
-                <input type="file" name="file" accept=".json" onchange="this.form.submit()" required>
+                <input type="file" id="jsonFileInput" accept=".json">
             </div>
-        </form>
+        </div>
 
         <div class="search-bar">
             <input type="text" id="searchInput" placeholder="Type to filter text or user live...">
@@ -138,100 +138,196 @@
             </select>
         </div>
 
-        <div class="stats" id="statsText">Showing {{ total_count }} of {{ total_count }} total loaded messages</div>
+        <div class="stats" id="statsText">No messages loaded yet!</div>
 
         <div class="logs-container" id="logsContainer">
-            {% for log in logs %}
-            <div class="log-card" 
-                 data-media="{{ log.media_type }}" 
-                 data-attachment="{{ 'true' if log.has_attachment else 'false' }}" 
-                 data-link="{{ 'true' if log.has_link else 'false' }}"
-                 data-broken="false"
-                 data-search="{{ log.content.lower() }} {{ log.author.lower() }}">
-                
-                {% if log.avatar %}
-                <img class="avatar" src="{{ log.avatar }}" alt="avatar" onerror="this.style.display='none'">
-                {% endif %}
-                
-                <div class="log-body">
-                    <div class="log-header">
-                        <div>
-                            <span class="channel">{{ log.channel }}</span>
-                            <span class="author">{{ log.author }}</span>
-                        </div>
-                        <!-- Pass raw ISO timestamp to JS -->
-                        <span class="timestamp local-time" data-timestamp="{{ log.iso_timestamp }}">
-                            {{ log.iso_timestamp }}
-                        </span>
-                    </div>
-                    <div class="content">{{ log.content }}</div>
-
-                    {% for att in log.attachments %}
-                        {% if att.type == 'image' or log.has_image %}
-                            <img src="{{ att.url if att.url else att }}" class="attachment-img" alt="attachment" onerror="handleBrokenMedia(this, '{{ att.url if att.url else att }}')">
-                        {% elif att.type == 'video' %}
-                            <video src="{{ att.url if att.url else att }}" controls class="attachment-video" onerror="handleBrokenMedia(this, '{{ att.url if att.url else att }}')"></video>
-                        {% elif att.type == 'audio' %}
-                            <audio src="{{ att.url if att.url else att }}" controls onerror="handleBrokenMedia(this, '{{ att.url if att.url else att }}')"></audio>
-                        {% else %}
-                            <a href="{{ att.url if att.url else att }}" target="_blank" style="color: var(--accent); font-size: 0.85em; display: block; margin-top: 6px;">📎 Attachment Link</a>
-                        {% endif %}
-                    {% endfor %}
-
-                    <div class="broken-container"></div>
-                </div>
-            </div>
-            {% else %}
-            <p style="color: var(--text-muted); text-align: center; margin-top: 40px;">
-                No messages loaded yet! Select a `.json` file above to auto-load :3
+            <p id="emptyMsg" style="color: var(--text-muted); text-align: center; margin-top: 40px;">
+                Select a `.json` file above to view messages instantly :3
             </p>
-            {% endfor %}
         </div>
     </div>
 
     <script>
-        const searchInput = document.getElementById('searchInput');
-        const mediaFilter = document.getElementById('mediaFilter');
-        const cards = document.querySelectorAll('.log-card');
-        const statsText = document.getElementById('statsText');
-        const totalCount = {{ total_count }};
+        const IMAGE_EXTS = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.svg'];
+        const VIDEO_EXTS = ['.mp4', '.webm', '.mov', '.m4v', '.mkv'];
+        const AUDIO_EXTS = ['.mp3', '.ogg', '.wav', '.flac', '.m4a'];
+        const DOC_EXTS = ['.pdf', '.docx', '.txt', '.zip', '.rar', '.7z', '.json', '.csv'];
 
-// Convert UTC/ISO Timestamps to local computer timezone & 12/24 hour preference!
-        function convertTimestampsToLocal() {
-            // Detect if system/browser environment prefers 12-hour clock
+        let allLogs = [];
+
+        function getAttachmentType(url) {
+            try {
+                const path = new URL(url).pathname.toLowerCase();
+                if (IMAGE_EXTS.some(ext => path.endsWith(ext))) return "image";
+                if (VIDEO_EXTS.some(ext => path.endsWith(ext))) return "video";
+                if (AUDIO_EXTS.some(ext => path.endsWith(ext))) return "audio";
+                if (DOC_EXTS.some(ext => path.endsWith(ext))) return "doc";
+            } catch (e) {}
+            return "other";
+        }
+
+        function formatLocalTimestamp(rawIso) {
+            if (!rawIso) return "";
+            const date = new Date(rawIso);
+            if (isNaN(date.getTime())) return rawIso;
+
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+
             const resolvedOptions = new Intl.DateTimeFormat(navigator.language, { hour: 'numeric' }).resolvedOptions();
             const is12Hour = resolvedOptions.hour12;
 
-            document.querySelectorAll('.local-time').forEach(el => {
-                const rawIso = el.getAttribute('data-timestamp');
-                if (rawIso) {
-                    const date = new Date(rawIso);
-                    if (!isNaN(date.getTime())) {
-                        const year = date.getFullYear();
-                        const month = String(date.getMonth() + 1).padStart(2, '0');
-                        const day = String(date.getDate()).padStart(2, '0');
+            let timeString = "";
+            if (is12Hour) {
+                let hours = date.getHours();
+                const ampm = hours >= 12 ? 'PM' : 'AM';
+                hours = hours % 12;
+                hours = hours ? hours : 12;
+                const hoursStr = String(hours).padStart(2, '0');
+                const minutes = String(date.getMinutes()).padStart(2, '0');
+                const seconds = String(date.getSeconds()).padStart(2, '0');
+                timeString = `${hoursStr}:${minutes}:${seconds} ${ampm}`;
+            } else {
+                const hours = String(date.getHours()).padStart(2, '0');
+                const minutes = String(date.getMinutes()).padStart(2, '0');
+                const seconds = String(date.getSeconds()).padStart(2, '0');
+                timeString = `${hours}:${minutes}:${seconds}`;
+            }
 
-                        let timeString = "";
-                        if (is12Hour) {
-                            let hours = date.getHours();
-                            const ampm = hours >= 12 ? 'PM' : 'AM';
-                            hours = hours % 12;
-                            hours = hours ? hours : 12; // 0 becomes 12
-                            const hoursStr = String(hours).padStart(2, '0');
-                            const minutes = String(date.getMinutes()).padStart(2, '0');
-                            const seconds = String(date.getSeconds()).padStart(2, '0');
-                            timeString = `${hoursStr}:${minutes}:${seconds} ${ampm}`;
-                        } else {
-                            const hours = String(date.getHours()).padStart(2, '0');
-                            const minutes = String(date.getMinutes()).padStart(2, '0');
-                            const seconds = String(date.getSeconds()).padStart(2, '0');
-                            timeString = `${hours}:${minutes}:${seconds}`;
-                        }
-                        
-                        el.textContent = `${year}-${month}-${day} ${timeString}`;
-                    }
+            return `${year}-${month}-${day} ${timeString}`;
+        }
+
+        document.getElementById('jsonFileInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                try {
+                    const data = JSON.parse(evt.target.result);
+                    parseAndRenderLogs(data);
+                } catch (err) {
+                    alert("Error parsing JSON file!");
+                    console.error(err);
                 }
+            };
+            reader.readAsText(file);
+        });
+
+        function parseAndRenderLogs(data) {
+            const guildName = data.guild?.name || "Direct Messages";
+            const channelName = data.channel?.name || "unknown-channel";
+            const rawMessages = data.messages || [];
+
+            allLogs = rawMessages.map(msg => {
+                const authorInfo = msg.author || {};
+                const rawAttachments = msg.attachments || [];
+                const attachments = [];
+
+                let hasImage = false, hasVideo = false, hasAudio = false, hasDoc = false;
+
+                rawAttachments.forEach(att => {
+                    const url = typeof att === 'object' ? att.url : att;
+                    if (url) {
+                        const type = getAttachmentType(url);
+                        if (type === 'image') hasImage = true;
+                        else if (type === 'video') hasVideo = true;
+                        else if (type === 'audio') hasAudio = true;
+                        else if (type === 'doc') hasDoc = true;
+
+                        attachments.push({ url, type });
+                    }
+                });
+
+                const content = msg.content || "";
+                const hasLink = /https?:\/\//.test(content);
+
+                let mediaType = "none";
+                if (hasImage) mediaType = "image";
+                else if (hasVideo) mediaType = "video";
+                else if (hasAudio) mediaType = "audio";
+                else if (hasDoc) mediaType = "doc";
+
+                return {
+                    id: String(msg.id || ""),
+                    timestamp: msg.timestamp || "",
+                    guild: guildName,
+                    channel: channelName.startsWith('#') ? channelName : `#${channelName}`,
+                    author: authorInfo.nickname || authorInfo.name || "Unknown User",
+                    avatar: authorInfo.avatarUrl || "",
+                    content: content,
+                    attachments: attachments,
+                    mediaType: mediaType,
+                    hasImage: hasImage,
+                    hasLink: hasLink,
+                    hasAttachment: attachments.length > 0
+                };
             });
+
+            renderLogs();
+        }
+
+        function renderLogs() {
+            const container = document.getElementById('logsContainer');
+            container.innerHTML = "";
+
+            if (allLogs.length === 0) {
+                container.innerHTML = '<p style="color: var(--text-muted); text-align: center; margin-top: 40px;">No messages found.</p>';
+                document.getElementById('statsText').textContent = "0 messages loaded";
+                return;
+            }
+
+            allLogs.forEach(log => {
+                const card = document.createElement('div');
+                card.className = 'log-card';
+                card.setAttribute('data-media', log.mediaType);
+                card.setAttribute('data-attachment', log.hasAttachment);
+                card.setAttribute('data-link', log.hasLink);
+                card.setAttribute('data-broken', 'false');
+                card.setAttribute('data-search', `${log.content.toLowerCase()} ${log.author.toLowerCase()}`);
+
+                let avatarHtml = log.avatar ? `<img class="avatar" src="${log.avatar}" alt="avatar" onerror="this.style.display='none'">` : '';
+
+                let attachmentsHtml = '';
+                log.attachments.forEach(att => {
+                    if (att.type === 'image' || log.hasImage) {
+                        attachmentsHtml += `<img src="${att.url}" class="attachment-img" alt="attachment" onerror="handleBrokenMedia(this, '${att.url}')">`;
+                    } else if (att.type === 'video') {
+                        attachmentsHtml += `<video src="${att.url}" controls class="attachment-video" onerror="handleBrokenMedia(this, '${att.url}')"></video>`;
+                    } else if (att.type === 'audio') {
+                        attachmentsHtml += `<audio src="${att.url}" controls onerror="handleBrokenMedia(this, '${att.url}')"></audio>`;
+                    } else {
+                        attachmentsHtml += `<a href="${att.url}" target="_blank" style="color: var(--accent); font-size: 0.85em; display: block; margin-top: 6px;">📎 Attachment Link</a>`;
+                    }
+                });
+
+                const formattedTime = formatLocalTimestamp(log.timestamp);
+
+                card.innerHTML = `
+                    ${avatarHtml}
+                    <div class="log-body">
+                        <div class="log-header">
+                            <div>
+                                <span class="channel">${escapeHtml(log.channel)}</span>
+                                <span class="author">${escapeHtml(log.author)}</span>
+                            </div>
+                            <span class="timestamp">${formattedTime}</span>
+                        </div>
+                        <div class="content">${escapeHtml(log.content)}</div>
+                        ${attachmentsHtml}
+                        <div class="broken-container"></div>
+                    </div>
+                `;
+
+                container.appendChild(card);
+            });
+
+            filterLogs();
+        }
+
+        function escapeHtml(str) {
+            return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
         }
 
         function handleBrokenMedia(element, url) {
@@ -252,8 +348,9 @@
         }
 
         function filterLogs() {
-            const query = searchInput.value.toLowerCase().trim();
-            const selectedMedia = mediaFilter.value;
+            const query = document.getElementById('searchInput').value.toLowerCase().trim();
+            const selectedMedia = document.getElementById('mediaFilter').value;
+            const cards = document.querySelectorAll('.log-card');
             let visibleCount = 0;
 
             cards.forEach(card => {
@@ -280,14 +377,11 @@
                 }
             });
 
-            statsText.textContent = `Showing ${visibleCount} of ${totalCount} total loaded messages`;
+            document.getElementById('statsText').textContent = `Showing ${visibleCount} of ${allLogs.length} total loaded messages`;
         }
 
-        // Run local conversion on page load!
-        convertTimestampsToLocal();
-
-        searchInput.addEventListener('input', filterLogs);
-        mediaFilter.addEventListener('change', filterLogs);
+        document.getElementById('searchInput').addEventListener('input', filterLogs);
+        document.getElementById('mediaFilter').addEventListener('change', filterLogs);
     </script>
 </body>
 </html>
