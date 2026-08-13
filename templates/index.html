@@ -11,6 +11,8 @@
             --text-normal: #dbdee1;
             --text-muted: #949ba4;
             --accent: #5865f2;
+            --accent-hover: #4752c4;
+            --danger: #f23f43;
         }
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -20,21 +22,38 @@
             padding: 20px;
         }
         .container {
-            max-width: 800px;
+            max-width: 850px;
             margin: 0 auto;
         }
         h1 {
             color: #fff;
+            margin-bottom: 20px;
+        }
+        .upload-section {
+            background-color: var(--bg-secondary);
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border: 2px dashed #4e5058;
             display: flex;
             align-items: center;
-            gap: 10px;
+            justify-content: space-between;
+        }
+        .upload-section input[type="file"] {
+            border: none;
+            padding: 0;
+            background: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            width: 100%;
         }
         .search-bar {
             display: flex;
             gap: 10px;
             margin-bottom: 20px;
+            flex-wrap: wrap;
         }
-        input, select, button {
+        input[type="text"], select {
             padding: 10px 14px;
             border-radius: 6px;
             border: 1px solid #1e1f22;
@@ -42,63 +61,233 @@
             color: #fff;
             font-size: 14px;
         }
-        input { flex-grow: 1; }
-        button {
-            background-color: var(--accent);
-            cursor: pointer;
-            border: none;
-            font-weight: bold;
-        }
-        button:hover { background-color: #4752c4; }
+        input[type="text"] { flex-grow: 1; min-width: 200px; }
+        select { min-width: 180px; cursor: pointer; }
         .log-card {
             background-color: var(--bg-secondary);
             padding: 14px 18px;
             border-radius: 8px;
             margin-bottom: 12px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            display: flex;
+            gap: 12px;
         }
+        .avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background-color: #5865f2;
+        }
+        .log-body { flex-grow: 1; }
         .log-header {
             display: flex;
             justify-content: space-between;
-            margin-bottom: 6px;
+            margin-bottom: 4px;
             font-size: 0.85em;
         }
         .author { font-weight: bold; color: #f2f3f5; }
-        .channel { color: var(--accent); font-weight: 600; }
+        .channel { color: var(--accent); font-weight: 600; margin-right: 8px; }
         .timestamp { color: var(--text-muted); }
-        .content { font-size: 0.95em; line-height: 1.4; }
+        .content { font-size: 0.95em; line-height: 1.4; white-space: pre-wrap; }
+        .attachment-img, .attachment-video {
+            max-width: 350px;
+            max-height: 250px;
+            border-radius: 6px;
+            margin-top: 8px;
+            display: block;
+        }
+        audio { margin-top: 8px; display: block; width: 100%; max-width: 400px; }
+        .broken-link-badge {
+            display: inline-block;
+            margin-top: 8px;
+            padding: 6px 12px;
+            background-color: rgba(242, 63, 67, 0.15);
+            border: 1px solid var(--danger);
+            color: #f23f43;
+            border-radius: 6px;
+            font-size: 0.85em;
+            font-weight: 600;
+        }
+        .stats { margin-bottom: 15px; color: var(--text-muted); font-size: 0.9em; }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>🐾 Discord Record Viewer</h1>
-        
-        <form class="search-bar" method="GET" action="/">
-            <input type="text" name="q" placeholder="Search message content or author..." value="{{ query }}">
-            <select name="channel">
-                <option value="all" {% if channel_filter == 'all' %}selected{% endif %}>All Channels</option>
-                <option value="#general" {% if channel_filter == '#general' %}selected{% endif %}>#general</option>
-                <option value="#dev-chat" {% if channel_filter == '#dev-chat' %}selected{% endif %}>#dev-chat</option>
-            </select>
-            <button type="submit">Search</button>
+
+        <!-- File Upload Form -->
+        <form class="upload-section" action="/" method="POST" enctype="multipart/form-data">
+            <div style="width: 100%;">
+                <strong>Import JSON Export: </strong>
+                <input type="file" name="file" accept=".json" onchange="this.form.submit()" required>
+            </div>
         </form>
 
-        <div class="logs-container">
+        <div class="search-bar">
+            <input type="text" id="searchInput" placeholder="Type to filter text or user live...">
+            
+            <select id="mediaFilter">
+                <option value="all">Filter by Media: All</option>
+                <option value="any">Has Any Attachment</option>
+                <option value="image">📷 Images</option>
+                <option value="video">🎥 Videos</option>
+                <option value="audio">🎵 Audio Files</option>
+                <option value="doc">📄 Documents/Files</option>
+                <option value="link">🔗 Contains Links</option>
+                <option value="broken">⚠️ Expired / Broken Links</option>
+            </select>
+        </div>
+
+        <div class="stats" id="statsText">Showing {{ total_count }} of {{ total_count }} total loaded messages</div>
+
+        <div class="logs-container" id="logsContainer">
             {% for log in logs %}
-            <div class="log-card">
-                <div class="log-header">
-                    <div>
-                        <span class="channel">{{ log.channel }}</span>
-                        <span class="author">{{ log.author }}</span>
+            <div class="log-card" 
+                 data-media="{{ log.media_type }}" 
+                 data-attachment="{{ 'true' if log.has_attachment else 'false' }}" 
+                 data-link="{{ 'true' if log.has_link else 'false' }}"
+                 data-broken="false"
+                 data-search="{{ log.content.lower() }} {{ log.author.lower() }}">
+                
+                {% if log.avatar %}
+                <img class="avatar" src="{{ log.avatar }}" alt="avatar" onerror="this.style.display='none'">
+                {% endif %}
+                
+                <div class="log-body">
+                    <div class="log-header">
+                        <div>
+                            <span class="channel">{{ log.channel }}</span>
+                            <span class="author">{{ log.author }}</span>
+                        </div>
+                        <!-- Pass raw ISO timestamp to JS -->
+                        <span class="timestamp local-time" data-timestamp="{{ log.iso_timestamp }}">
+                            {{ log.iso_timestamp }}
+                        </span>
                     </div>
-                    <span class="timestamp">{{ log.timestamp }}</span>
+                    <div class="content">{{ log.content }}</div>
+
+                    {% for att in log.attachments %}
+                        {% if att.type == 'image' or log.has_image %}
+                            <img src="{{ att.url if att.url else att }}" class="attachment-img" alt="attachment" onerror="handleBrokenMedia(this, '{{ att.url if att.url else att }}')">
+                        {% elif att.type == 'video' %}
+                            <video src="{{ att.url if att.url else att }}" controls class="attachment-video" onerror="handleBrokenMedia(this, '{{ att.url if att.url else att }}')"></video>
+                        {% elif att.type == 'audio' %}
+                            <audio src="{{ att.url if att.url else att }}" controls onerror="handleBrokenMedia(this, '{{ att.url if att.url else att }}')"></audio>
+                        {% else %}
+                            <a href="{{ att.url if att.url else att }}" target="_blank" style="color: var(--accent); font-size: 0.85em; display: block; margin-top: 6px;">📎 Attachment Link</a>
+                        {% endif %}
+                    {% endfor %}
+
+                    <div class="broken-container"></div>
                 </div>
-                <div class="content">{{ log.content }}</div>
             </div>
             {% else %}
-            <p style="color: var(--text-muted); text-align: center;">No logs found matching your criteria :3</p>
+            <p style="color: var(--text-muted); text-align: center; margin-top: 40px;">
+                No messages loaded yet! Select a `.json` file above to auto-load :3
+            </p>
             {% endfor %}
         </div>
     </div>
+
+    <script>
+        const searchInput = document.getElementById('searchInput');
+        const mediaFilter = document.getElementById('mediaFilter');
+        const cards = document.querySelectorAll('.log-card');
+        const statsText = document.getElementById('statsText');
+        const totalCount = {{ total_count }};
+
+// Convert UTC/ISO Timestamps to local computer timezone & 12/24 hour preference!
+        function convertTimestampsToLocal() {
+            // Detect if system/browser environment prefers 12-hour clock
+            const resolvedOptions = new Intl.DateTimeFormat(navigator.language, { hour: 'numeric' }).resolvedOptions();
+            const is12Hour = resolvedOptions.hour12;
+
+            document.querySelectorAll('.local-time').forEach(el => {
+                const rawIso = el.getAttribute('data-timestamp');
+                if (rawIso) {
+                    const date = new Date(rawIso);
+                    if (!isNaN(date.getTime())) {
+                        const year = date.getFullYear();
+                        const month = String(date.getMonth() + 1).padStart(2, '0');
+                        const day = String(date.getDate()).padStart(2, '0');
+
+                        let timeString = "";
+                        if (is12Hour) {
+                            let hours = date.getHours();
+                            const ampm = hours >= 12 ? 'PM' : 'AM';
+                            hours = hours % 12;
+                            hours = hours ? hours : 12; // 0 becomes 12
+                            const hoursStr = String(hours).padStart(2, '0');
+                            const minutes = String(date.getMinutes()).padStart(2, '0');
+                            const seconds = String(date.getSeconds()).padStart(2, '0');
+                            timeString = `${hoursStr}:${minutes}:${seconds} ${ampm}`;
+                        } else {
+                            const hours = String(date.getHours()).padStart(2, '0');
+                            const minutes = String(date.getMinutes()).padStart(2, '0');
+                            const seconds = String(date.getSeconds()).padStart(2, '0');
+                            timeString = `${hours}:${minutes}:${seconds}`;
+                        }
+                        
+                        el.textContent = `${year}-${month}-${day} ${timeString}`;
+                    }
+                }
+            });
+        }
+
+        function handleBrokenMedia(element, url) {
+            const card = element.closest('.log-card');
+            card.setAttribute('data-broken', 'true');
+            const container = card.querySelector('.broken-container');
+            
+            element.style.display = 'none';
+
+            if (container && !container.innerHTML.includes('Expired')) {
+                container.innerHTML += `
+                    <div class="broken-link-badge">
+                        ⚠️ Image / Attachment Expired (<a href="${url}" target="_blank" style="color: inherit; text-decoration: underline;">Open Broken URL</a>)
+                    </div>
+                `;
+            }
+            filterLogs();
+        }
+
+        function filterLogs() {
+            const query = searchInput.value.toLowerCase().trim();
+            const selectedMedia = mediaFilter.value;
+            let visibleCount = 0;
+
+            cards.forEach(card => {
+                const mediaType = card.getAttribute('data-media');
+                const hasAttachment = card.getAttribute('data-attachment') === 'true';
+                const hasLink = card.getAttribute('data-link') === 'true';
+                const isBroken = card.getAttribute('data-broken') === 'true';
+                const searchText = card.getAttribute('data-search');
+
+                let matchesMedia = false;
+                if (selectedMedia === 'all') matchesMedia = true;
+                else if (selectedMedia === 'any') matchesMedia = hasAttachment;
+                else if (selectedMedia === 'link') matchesMedia = hasLink;
+                else if (selectedMedia === 'broken') matchesMedia = isBroken;
+                else matchesMedia = (mediaType === selectedMedia);
+
+                let matchesQuery = !query || searchText.includes(query);
+
+                if (matchesMedia && matchesQuery) {
+                    card.style.display = 'flex';
+                    visibleCount++;
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+
+            statsText.textContent = `Showing ${visibleCount} of ${totalCount} total loaded messages`;
+        }
+
+        // Run local conversion on page load!
+        convertTimestampsToLocal();
+
+        searchInput.addEventListener('input', filterLogs);
+        mediaFilter.addEventListener('change', filterLogs);
+    </script>
 </body>
 </html>
