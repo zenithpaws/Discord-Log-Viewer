@@ -36,7 +36,7 @@ Clone the repository and install Flask:
 ```bash
 git clone [https://github.com/your-username/discord-log-viewer.git](https://github.com/your-username/discord-log-viewer.git)
 cd discord-log-viewer
-pip install flask
+pip install flask```
 
 ---
 
