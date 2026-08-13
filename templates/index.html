@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Discord Record & Log Viewer</title>
+    <style>
+        :root {
+            --bg-primary: #313338;
+            --bg-secondary: #2b2d31;
+            --text-normal: #dbdee1;
+            --text-muted: #949ba4;
+            --accent: #5865f2;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-primary);
+            color: var(--text-normal);
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: #fff;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .search-bar {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        input, select, button {
+            padding: 10px 14px;
+            border-radius: 6px;
+            border: 1px solid #1e1f22;
+            background-color: var(--bg-secondary);
+            color: #fff;
+            font-size: 14px;
+        }
+        input { flex-grow: 1; }
+        button {
+            background-color: var(--accent);
+            cursor: pointer;
+            border: none;
+            font-weight: bold;
+        }
+        button:hover { background-color: #4752c4; }
+        .log-card {
+            background-color: var(--bg-secondary);
+            padding: 14px 18px;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        .log-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 6px;
+            font-size: 0.85em;
+        }
+        .author { font-weight: bold; color: #f2f3f5; }
+        .channel { color: var(--accent); font-weight: 600; }
+        .timestamp { color: var(--text-muted); }
+        .content { font-size: 0.95em; line-height: 1.4; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🐾 Discord Record Viewer</h1>
+        
+        <form class="search-bar" method="GET" action="/">
+            <input type="text" name="q" placeholder="Search message content or author..." value="{{ query }}">
+            <select name="channel">
+                <option value="all" {% if channel_filter == 'all' %}selected{% endif %}>All Channels</option>
+                <option value="#general" {% if channel_filter == '#general' %}selected{% endif %}>#general</option>
+                <option value="#dev-chat" {% if channel_filter == '#dev-chat' %}selected{% endif %}>#dev-chat</option>
+            </select>
+            <button type="submit">Search</button>
+        </form>
+
+        <div class="logs-container">
+            {% for log in logs %}
+            <div class="log-card">
+                <div class="log-header">
+                    <div>
+                        <span class="channel">{{ log.channel }}</span>
+                        <span class="author">{{ log.author }}</span>
+                    </div>
+                    <span class="timestamp">{{ log.timestamp }}</span>
+                </div>
+                <div class="content">{{ log.content }}</div>
+            </div>
+            {% else %}
+            <p style="color: var(--text-muted); text-align: center;">No logs found matching your criteria :3</p>
+            {% endfor %}
+        </div>
+    </div>
+</body>
+</html>
