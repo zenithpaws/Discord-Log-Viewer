@@ -1,3 +1,4 @@
+
 # 🐾 Discord Log & Record Viewer
 
 A lightweight, fast, client-side Discord chat log viewer built with Flask and modern JavaScript. Easily search, filter, and review exported Discord JSON logs directly in your browser.
@@ -36,7 +37,8 @@ Clone the repository and install Flask:
 ```bash
 git clone [https://github.com/your-username/discord-log-viewer.git](https://github.com/your-username/discord-log-viewer.git)
 cd discord-log-viewer
-pip install flask```
+pip install flask
+```
 
 ---
 
